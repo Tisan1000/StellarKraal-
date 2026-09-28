@@ -1,6 +1,5 @@
 'use client';
 import { Suspense, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Download } from 'lucide-react';
 import SearchFilterBar from '@/components/SearchFilterBar';
@@ -104,33 +103,76 @@ function ExportCsvButton({ loans }: { loans: Loan[] }) {
 }
 
 function LoanListContent() {
-  const searchParams = useSearchParams();
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
   const reduced = useReducedMotion();
   const { t } = useI18n();
 
+  // Derive dynamic min/max amounts from loaded loans
+  const [amountRange, setAmountRange] = useState<[number, number]>([0, 0]);
+  const [selectedAmountRange, setSelectedAmountRange] = useState<[number, number]>([0, 0]);
+
+  // useSearchFilter manages query, status chips, date range, and URL sync
+  // SearchFilterBar renders its own instance that writes to URL; this instance
+  // reads back from the URL so LoanListContent can filter the in-memory list.
+  const {
+    filters,
+    debouncedQuery,
+    clearAll,
+    hasActiveFilters,
+  } = useSearchFilter();
+
   useEffect(() => {
     setLoading(true);
     fetch(`${API}/api/loans`)
       .then((r) => r.json())
-      .then((data) => setLoans(Array.isArray(data) ? data : []))
+      .then((data: Loan[]) => {
+        const list = Array.isArray(data) ? data : [];
+        setLoans(list);
+        if (list.length > 0) {
+          const amounts = list.map((l) => l.amount);
+          const minAmt = Math.min(...amounts);
+          const maxAmt = Math.max(...amounts);
+          setAmountRange([minAmt, maxAmt]);
+          setSelectedAmountRange([minAmt, maxAmt]);
+        }
+      })
       .catch(() => setLoans([]))
       .finally(() => setLoading(false));
   }, []);
 
-  const q = (searchParams.get('q') ?? '').toLowerCase();
-  const statuses = searchParams.getAll('status');
+  const hasAmountFilter =
+    amountRange[0] !== amountRange[1] &&
+    (selectedAmountRange[0] !== amountRange[0] || selectedAmountRange[1] !== amountRange[1]);
 
   const filtered = loans.filter((loan) => {
+    // Text search: ID or collateral ID (case-insensitive)
     const matchesQuery =
-      !q ||
-      loan.id.toLowerCase().includes(q) ||
-      loan.borrower.toLowerCase().includes(q) ||
-      loan.status.toLowerCase().includes(q);
-    const matchesStatus = statuses.length === 0 || statuses.includes(loan.status);
-    return matchesQuery && matchesStatus;
+      !debouncedQuery ||
+      loan.id.toLowerCase().includes(debouncedQuery.toLowerCase()) ||
+      loan.borrower.toLowerCase().includes(debouncedQuery.toLowerCase());
+
+    // Status chip filter
+    const matchesStatus =
+      filters.statuses.length === 0 || filters.statuses.includes(loan.status);
+
+    // Amount range filter
+    const matchesAmount =
+      !hasAmountFilter ||
+      (loan.amount >= selectedAmountRange[0] && loan.amount <= selectedAmountRange[1]);
+
+    // Date range filter
+    const loanDate = new Date(loan.createdAt);
+    const matchesDateFrom = !filters.dateFrom || loanDate >= new Date(filters.dateFrom);
+    const matchesDateTo = !filters.dateTo || loanDate <= new Date(filters.dateTo);
+
+    return matchesQuery && matchesStatus && matchesAmount && matchesDateFrom && matchesDateTo;
   });
+
+  const handleClearAll = () => {
+    clearAll();
+    setSelectedAmountRange(amountRange);
+  };
 
   return (
     <div className="space-y-4">
