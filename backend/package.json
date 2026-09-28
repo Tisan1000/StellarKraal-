@@ -98,7 +98,7 @@
       "./src/jest.setup.ts"
     ],
     "transformIgnorePatterns": [
-      "node_modules/(?!(@stellar|@noble)/)"
+      "node_modules/(?!(@stellar|@noble|uint8array-extras)/)"
     ],
     "globals": {
       "ts-jest": {

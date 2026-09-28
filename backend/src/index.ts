@@ -1311,11 +1311,10 @@ app.post(
       animal_type: species.trim(),
       count: 1,
       appraised_value,
-      species: species.trim(),
       breed: breed.trim(),
-      age: ageNum,
-      weight: weightNum,
-      image_url: imageUrl,
+      age_years: ageNum,
+      weight_kg: weightNum,
+      photo_url: imageUrl,
     });
 
     invalidateCache('/api/collateral');
@@ -2113,6 +2112,7 @@ if (process.env.NODE_ENV !== 'test') {
       logLevel: process.env.LOG_LEVEL || 'info',
     });
   });
+  registerSignalHandlers(httpServer, SHUTDOWN_TIMEOUT_MS, undefined, healthFactorTask);
 }
 
 const healthFactorTask = scheduleHealthFactorJob();
