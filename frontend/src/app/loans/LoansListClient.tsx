@@ -23,7 +23,8 @@ interface Loan {
 
 const STATUS_OPTIONS = ['active', 'repaid', 'liquidated', 'pending'];
 const TYPE_OPTIONS: string[] = [];
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+/** Max XLM slider bound — adjust if portfolio amounts grow beyond 100k */
+const MAX_AMOUNT = 100_000;
 
 /** CSV column definitions for loan export — closes #1203 */
 const LOAN_CSV_COLUMNS: CsvColumn<Loan>[] = [
