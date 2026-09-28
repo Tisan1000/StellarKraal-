@@ -78,7 +78,7 @@ import path from 'path';
 import { mkdirSync, unlinkSync } from 'fs';
 import multer from 'multer';
 import { z } from 'zod';
-import { globalLimiter, authLimiter, readLimiter, writeLimiter } from './middleware/rateLimit';
+import { globalLimiter, authLimiter, readLimiter, writeLimiter, walletLimiter } from './middleware/rateLimit';
 import { asyncHandler } from './utils/asyncHandler';
 import { validate } from './middleware/validate';
 import { stellarPublicKeySchema } from './validators/stellar';
@@ -266,8 +266,8 @@ app.use('/api/v2', v2Router);
  *
  * Apollo Sandbox (interactive explorer) is available in non-production at /graphql.
  *
- * The endpoint is intentionally unauthenticated for the PoC; add jwtMiddleware
- * to the handler array when authentication is required.
+ * JWT auth middleware is applied so that the authenticated wallet address is
+ * forwarded to resolvers via GraphQLContext.userPublicKey (#1220).
  */
 let apolloServer: import('@apollo/server').ApolloServer | undefined;
 
@@ -276,8 +276,9 @@ let apolloServer: import('@apollo/server').ApolloServer | undefined;
     const { middleware, server } = await createGraphQLMiddleware();
     apolloServer = server;
     // Apollo Server 4 / expressMiddleware requires JSON body parsing before the handler.
+    // jwtMiddleware guards POST requests (all GraphQL operations use POST).
     // Cast to any to work around Express 5 generic overload resolution.
-    app.use('/graphql', express.json(), middleware as any);
+    app.use('/graphql', express.json(), jwtMiddleware, middleware as any);
     logger.info('GraphQL endpoint mounted at /graphql');
   } catch (err) {
     logger.error('Failed to start Apollo Server', {
@@ -499,6 +500,7 @@ app.post(
 // POST /api/loan/request
 app.post(
   '/api/loan/request',
+  walletLimiter,
   timeoutMiddleware(CONTRACT_TIMEOUT_MS),
   asyncHandler(async (req: Request, res: Response) => {
     const validation = loanRequestSchema.safeParse(req.body);
